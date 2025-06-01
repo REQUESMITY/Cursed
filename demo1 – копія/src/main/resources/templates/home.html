@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8" />
+    <title>To-Do List</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        input, button, textarea, select { font-size: 16px; padding: 8px; }
+        .task { border-bottom: 1px solid #ccc; padding: 8px 0; }
+        .completed { text-decoration: line-through; color: gray; }
+    </style>
+</head>
+<body>
+<h1>Список завдань</h1>
+
+<h3>Додати нове завдання</h3>
+<input type="text" id="title" placeholder="Назва завдання" />
+<br /><br />
+<textarea id="description" placeholder="Опис завдання" rows="3" cols="50"></textarea>
+<br /><br />
+<label>Статус:
+    <select id="status">
+        <option value="New">Нове</option>
+        <option value="In Progress">В процесі</option>
+        <option value="Completed">Завершено</option>
+    </select>
+</label>
+<br /><br />
+<button onclick="createTask()">Додати</button>
+
+<h3>Фільтр задач</h3>
+<button onclick="fetchTasks('all')">Всі</button>
+<button onclick="fetchTasks('active')">Активні</button>
+<button onclick="fetchTasks('completed')">Завершені</button>
+
+<h3>Список</h3>
+<div id="tasks"></div>
+
+<script>
+    const apiUrl = "/api/tasks";
+
+    async function fetchTasks(filter = 'all') {
+        try {
+            const res = await fetch(apiUrl);
+            const tasks = await res.json();
+
+            let filtered = tasks;
+            if (filter === 'active') filtered = tasks.filter(t => t.status !== 'Completed');
+            if (filter === 'completed') filtered = tasks.filter(t => t.status === 'Completed');
+
+            const container = document.getElementById('tasks');
+            container.innerHTML = '';
+            filtered.forEach(task => {
+                const div = document.createElement('div');
+                div.className = 'task';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = (task.status === 'Completed');
+                checkbox.onchange = () => toggleComplete(task.id, checkbox.checked);
+
+                const span = document.createElement('span');
+                span.textContent = `${task.title} - ${task.description} [${task.status}]`;
+                if (task.status === 'Completed') span.classList.add('completed');
+
+                const del = document.createElement('button');
+                del.textContent = 'Видалити';
+                del.onclick = () => deleteTask(task.id);
+
+                div.appendChild(checkbox);
+                div.appendChild(span);
+                div.appendChild(del);
+                container.appendChild(div);
+            });
+        } catch {
+            alert('Помилка при завантаженні задач');
+        }
+    }
+
+    async function createTask() {
+        const title = document.getElementById('title').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const status = document.getElementById('status').value;
+
+        if (!title) return alert('Введіть назву завдання');
+
+        const task = { title, description, status };
+
+        try {
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(task)
+            });
+
+            if (res.ok) {
+                document.getElementById('title').value = '';
+                document.getElementById('description').value = '';
+                fetchTasks();
+            } else {
+                const msg = await res.text();
+                alert('Помилка при створенні завдання: ' + msg);
+            }
+        } catch (e) {
+            alert('Мережева помилка: ' + e.message);
+        }
+    }
+
+    async function toggleComplete(id, completed) {
+        const res = await fetch(`${apiUrl}/${id}`);
+        const task = await res.json();
+        task.status = completed ? 'Completed' : 'New';
+
+        await fetch(`${apiUrl}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(task)
+        });
+
+        fetchTasks();
+    }
+
+    async function deleteTask(id) {
+        await fetch(`${apiUrl}/${id}`, { method: 'DELETE' });
+        fetchTasks();
+    }
+
+    fetchTasks();
+</script>
+</body>
+</html>
